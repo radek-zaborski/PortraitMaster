@@ -1,9 +1,8 @@
 const Photo = require('../models/photo.model');
-
-/****** SUBMIT PHOTO ********/
+const Voter = require('../models/vote.model');
+const requestIp = require('request-ip');
 
 exports.add = async (req, res) => {
-
   try {
     const { title, author, email } = req.fields;
     const file = req.files.file;
@@ -18,55 +17,75 @@ exports.add = async (req, res) => {
         throw new Error('Invalid characters');
       }
       
-    if(title && author && email && file) { // if fields are not empty...
+    if(title && author && email && file) {
 
-      const fileName = file.path.split('/').slice(-1)[0]; // cut only filename from full path, e.g. C:/test/abc.jpg -> abc.jpg
-      const fileExt = fileName.split('.').slice(-1)[0];
+      const stringCorrect = new RegExp(/(([A-z]|\s)*)/, 'g');
+      const correctAuthor = author.match(stringCorrect).join('');
+      const correctTitle = title.match(stringCorrect).join('');
+
+      const stringMail = new RegExp(/^[0-9a-z_.-]+@[0-9a-z.-]+\.[a-z]{2,3}$/, 'i');
+      const correctMail = email.match(stringMail).join('');
+
+      const fileName = file.path.split('/').slice(-1)[0];
+      const extFile = fileName.split('.').slice(-1)[0];
       
-      if(fileExt == 'gif' ||fileExt == 'jpg' ||fileExt == 'png'){
-      const newPhoto = new Photo({ title, author, email, src: fileName, votes: 0 });
-      await newPhoto.save(); // ...save new photo in DB
+      if(extFile == 'gif' ||extFile == 'jpg' ||extFile == 'png'){
+      const newPhoto = new Photo({ title: correctTitle, author: correctAuthor, email: correctMail, src: fileName, votes: 0 });
+      await newPhoto.save();
       res.json(newPhoto);
       }
       else {
-        throw new Error('Wrong input!')
+        throw new Error('please enter a valid data')
       }
     } else {
-      throw new Error('Wrong input!');
+      throw new Error('please enter a valid data');
     }
 
   } catch(err) {
     res.status(500).json(err);
   }
-
 };
 
-/****** LOAD ALL PHOTOS ********/
-
 exports.loadAll = async (req, res) => {
-
   try {
     res.json(await Photo.find());
   } catch(err) {
     res.status(500).json(err);
   }
-
 };
-
-/****** VOTE FOR PHOTO ********/
 
 exports.vote = async (req, res) => {
 
   try {
     const photoToUpdate = await Photo.findOne({ _id: req.params.id });
-    if(!photoToUpdate) res.status(404).json({ message: 'Not found' });
-    else {
+    const clientIp = requestIp.getClientIp(req);
+    const findVote = await Voter.findOne({ user: clientIp });
+
+    if(!photoToUpdate) {
+      res.status(404).json({ message: 'Not found' });
+
+    } else if(!findVote) {  
+      const newVoter = new Voter({ user: clientIp, votes: [photoToUpdate] });
+      newVoter.save();
+      console.log('add new Voter', newVoter);
+
       photoToUpdate.votes++;
       photoToUpdate.save();
       res.send({ message: 'OK' });
+
+    } else if(findVote) {
+      const isVoted = findVote.votes.includes(photoToUpdate._id);
+      
+      if (!isVoted) {
+        findVote.votes.push(photoToUpdate);
+        findVote.save();
+        photoToUpdate.votes++;
+        photoToUpdate.save();
+      } else {
+        res.status(500).json({ message: 'sorry, You have voted before' });
+      }
     }
   } catch(err) {
     res.status(500).json(err);
   }
-
 };
