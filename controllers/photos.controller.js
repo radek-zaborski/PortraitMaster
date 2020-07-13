@@ -29,7 +29,7 @@ exports.add = async (req, res) => {
       const fileName = file.path.split('/').slice(-1)[0];
       const extFile = fileName.split('.').slice(-1)[0];
       
-      if(extFile == 'gif' ||extFile == 'jpg' ||extFile == 'png'){
+      if(extFile === 'gif' ||extFile === 'jpg' ||extFile === 'png'){
       const newPhoto = new Photo({ title: correctTitle, author: correctAuthor, email: correctMail, src: fileName, votes: 0 });
       await newPhoto.save();
       res.json(newPhoto);
